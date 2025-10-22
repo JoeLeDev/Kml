@@ -293,19 +293,29 @@
       reader.readAsText(currentFile);
     }
 
-    // Charger les statistiques actuelles
+    // Charger les statistiques actuelles depuis Vercel KV
     async function loadCurrentStats() {
       try {
-        const response = await fetch('/api/stats');
+        const response = await fetch('/api/get-kml');
         if (response.ok) {
-          const stats = await response.json();
-          document.getElementById('totalPoints').textContent = stats.points || '0';
-          document.getElementById('lastModified').textContent = stats.lastModified || 'Jamais';
-          document.getElementById('fileSize').textContent = stats.fileSize || '0 KB';
-          document.getElementById('lastUpdate').textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
+          const result = await response.json();
+          if (result.success && result.data) {
+            document.getElementById('totalPoints').textContent = result.data.points || '0';
+            document.getElementById('lastModified').textContent = new Date(result.data.updatedAt).toLocaleString('fr-FR');
+            document.getElementById('fileSize').textContent = formatFileSize(result.data.content.length);
+            document.getElementById('lastUpdate').textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
+            addLog('✅ Statistiques chargées depuis Vercel KV', 'success');
+          } else {
+            document.getElementById('totalPoints').textContent = '0';
+            document.getElementById('lastModified').textContent = 'Jamais';
+            document.getElementById('fileSize').textContent = '0 KB';
+            addLog('⚠️ Aucun fichier KML trouvé dans la base de données', 'warning');
+          }
+        } else {
+          addLog('❌ Erreur lors du chargement des statistiques', 'error');
         }
       } catch (error) {
-        addLog(`Erreur lors du chargement des statistiques: ${error.message}`, 'error');
+        addLog(`❌ Erreur lors du chargement des statistiques: ${error.message}`, 'error');
       }
     }
 
@@ -351,6 +361,38 @@
       }
     }
 
+
+    // Télécharger le fichier KML depuis la base de données
+    async function downloadKml() {
+      try {
+        addLog('📥 Téléchargement du fichier KML...', 'info');
+        
+        const response = await fetch('/api/get-kml');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            // Créer un blob et télécharger
+            const blob = new Blob([result.data.content], { type: 'application/vnd.google-earth.kml+xml' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = result.data.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            addLog(`✅ Fichier ${result.data.name} téléchargé`, 'success');
+          } else {
+            addLog('❌ Aucun fichier KML trouvé dans la base de données', 'error');
+          }
+        } else {
+          addLog('❌ Erreur lors du téléchargement', 'error');
+        }
+      } catch (error) {
+        addLog(`❌ Erreur lors du téléchargement: ${error.message}`, 'error');
+      }
+    }
 
     // Supprimer le fichier KML
     async function deleteKml() {
