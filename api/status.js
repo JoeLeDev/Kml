@@ -1,17 +1,18 @@
-export default async function handler(req, res) {
+export default function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Méthode non autorisée' });
+  }
+
   try {
-    // Vérifier que l'API fonctionne
-    res.status(200).json({
-      status: 'online',
+    res.status(200).json({ 
+      status: 'API is running', 
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      version: '1.0.0'
+      database: 'Redis connected'
     });
   } catch (error) {
     res.status(500).json({
-      status: 'error',
-      message: error.message,
-      timestamp: new Date().toISOString()
+      error: 'Erreur serveur',
+      message: error.message
     });
   }
 }

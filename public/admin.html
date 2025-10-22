@@ -297,7 +297,7 @@
       reader.readAsText(currentFile);
     }
 
-    // Charger les statistiques actuelles depuis Vercel KV
+    // Charger les statistiques actuelles depuis Redis
     async function loadCurrentStats() {
       try {
         const response = await fetch('/api/get-kml');
@@ -308,17 +308,23 @@
             document.getElementById('lastModified').textContent = new Date(result.data.updatedAt).toLocaleString('fr-FR');
             document.getElementById('fileSize').textContent = formatFileSize(result.data.content.length);
             document.getElementById('lastUpdate').textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
-            addLog('✅ Statistiques chargées depuis Vercel KV', 'success');
+            addLog('✅ Statistiques chargées depuis Redis', 'success');
           } else {
             document.getElementById('totalPoints').textContent = '0';
             document.getElementById('lastModified').textContent = 'Jamais';
             document.getElementById('fileSize').textContent = '0 KB';
-            addLog('⚠️ Aucun fichier KML trouvé dans la base de données', 'warning');
+            addLog('⚠️ Aucun fichier KML trouvé dans Redis', 'warning');
           }
         } else {
-          addLog('❌ Erreur lors du chargement des statistiques', 'error');
+          document.getElementById('totalPoints').textContent = '0';
+          document.getElementById('lastModified').textContent = 'Jamais';
+          document.getElementById('fileSize').textContent = '0 KB';
+          addLog('⚠️ Aucun fichier KML trouvé dans Redis', 'warning');
         }
       } catch (error) {
+        document.getElementById('totalPoints').textContent = '0';
+        document.getElementById('lastModified').textContent = 'Jamais';
+        document.getElementById('fileSize').textContent = '0 KB';
         addLog(`❌ Erreur lors du chargement des statistiques: ${error.message}`, 'error');
       }
     }
