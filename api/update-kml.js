@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 export default async function handler(req, res) {
   // Vérifier la méthode HTTP
   if (req.method !== 'POST') {
@@ -9,40 +6,30 @@ export default async function handler(req, res) {
 
   try {
     // Vérifier que le fichier est présent
-    if (!req.body || !req.body.kmlFile) {
-      return res.status(400).json({ error: 'Aucun fichier KML fourni' });
+    if (!req.body || !req.body.kmlContent) {
+      return res.status(400).json({ error: 'Aucun contenu KML fourni' });
     }
 
-    // Chemin vers le fichier KML
-    const kmlPath = path.join(process.cwd(), 'public', 'data', 'members.kml');
-    
-    // Sauvegarder l'ancien fichier (backup)
-    if (fs.existsSync(kmlPath)) {
-      const backupPath = path.join(process.cwd(), 'public', 'data', `members.backup.${Date.now()}.kml`);
-      fs.copyFileSync(kmlPath, backupPath);
-    }
-
-    // Écrire le nouveau fichier
-    fs.writeFileSync(kmlPath, req.body.kmlFile);
-
-    // Analyser le fichier pour compter les points
-    const kmlText = req.body.kmlFile;
-    const placemarks = (kmlText.match(/<Placemark>/g) || []).length;
+    // Pour Vercel, on ne peut pas écrire directement sur le système de fichiers
+    // On va retourner les données pour que le client les sauvegarde
+    const kmlContent = req.body.kmlContent;
+    const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
     // Log de l'opération
-    console.log(`Fichier KML mis à jour: ${placemarks} points trouvés`);
+    console.log(`Fichier KML reçu: ${placemarks} points trouvés`);
 
     res.status(200).json({
       success: true,
-      message: 'Fichier KML mis à jour avec succès',
+      message: 'Fichier KML reçu avec succès',
       points: placemarks,
+      kmlContent: kmlContent,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du fichier KML:', error);
+    console.error('Erreur lors du traitement du fichier KML:', error);
     res.status(500).json({
-      error: 'Erreur lors de la mise à jour du fichier',
+      error: 'Erreur lors du traitement du fichier',
       message: error.message
     });
   }
