@@ -334,18 +334,22 @@
       try {
         const response = await fetch('/api/status');
         if (response.ok) {
-          isConnected = true;
-          document.getElementById('connectionStatus').textContent = '🟢 Connecté';
-          document.getElementById('connectionStatus').className = 'status status-online';
-          addLog('✅ Connexion au serveur établie', 'success');
+          if (!isConnected) {
+            isConnected = true;
+            document.getElementById('connectionStatus').textContent = '🟢 Connecté';
+            document.getElementById('connectionStatus').className = 'status status-online';
+            addLog('✅ Connexion au serveur établie', 'success');
+          }
         } else {
           throw new Error('Serveur non disponible');
         }
       } catch (error) {
-        isConnected = false;
-        document.getElementById('connectionStatus').textContent = '🔴 Déconnecté';
-        document.getElementById('connectionStatus').className = 'status status-offline';
-        addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+        if (isConnected) {
+          isConnected = false;
+          document.getElementById('connectionStatus').textContent = '🔴 Déconnecté';
+          document.getElementById('connectionStatus').className = 'status status-offline';
+          addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+        }
       }
     }
 
@@ -447,9 +451,9 @@
       }
     }
 
-    // Vérification périodique du statut
+    // Vérification périodique du statut (moins fréquente)
     function startStatusCheck() {
-      setInterval(checkStatus, 30000); // Toutes les 30 secondes
+      setInterval(checkStatus, 60000); // Toutes les 60 secondes (au lieu de 30)
     }
 
     // Ajouter une entrée au log
