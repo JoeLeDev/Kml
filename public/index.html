@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carte KML - Intégration</title>
+  <style>
+    :root { --bg:#f5f5f5; --primary:#667eea; --secondary:#764ba2; --ok:#22c55e; --danger:#ef4444; }
+    * { box-sizing: border-box }
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg)}
+    
+    /* Interface simplifiée pour iframe */
+    .header{background:linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%);color:#fff;padding:8px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+    .header h1{margin:0;font-weight:600;font-size:16px}
+    .controls{background:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .btn{padding:6px 12px;border:0;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px}
+    .btn-green{background:var(--ok);color:#fff}
+    .btn-red{background:var(--danger);color:#fff}
+    .btn-ghost{background:#fff;border:1px solid #e5e7eb}
+    .status{font-style:italic;color:#555;font-size:12px}
+    .err{background:#ffeded;color:#8a1111;padding:6px 8px;border-bottom:1px solid #f5c2c2;display:none;font-size:12px}
+    #map{height:calc(100vh - 120px);width:100%}
+    .info{background:#fff;margin:8px 12px;padding:8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🗺️ Carte des Membres FIO-MFI</h1>
+  </div>
+
+  <div id="err" class="err"></div>
+
+  <div class="controls">
+    <label class="btn btn-green">
+      📁 Charger KML
+      <input id="kmlFile" type="file" accept=".kml,.xml" style="display:none">
+    </label>
+
+    <button id="clearMap" class="btn btn-red">🗑️ Effacer</button>
+
+    <button id="toggleCluster" class="btn btn-ghost" title="Clustering">🧩 <span id="clState">ON</span></button>
+
+    <button id="toggleMapType" class="btn btn-ghost" title="Type de carte">🗺️ <span id="mapTypeState">Plan</span></button>
+
+    <button id="centerOnPoints" class="btn btn-ghost" title="Centrer" style="display:none">🎯 Centrer</button>
+
+    <button id="clearStorage" class="btn btn-ghost" title="Effacer cache" style="display:none">💾 Cache</button>
+
+    <div class="status" id="status">Aucun fichier chargé</div>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="info" id="stats" style="display:none"></div>
+
+  <!-- Google Maps sera chargé dynamiquement -->
+  <script>
+    // Définir initMap globalement AVANT de charger l'API
+    window.initMap = function() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 2,
+        center: { lat: 20, lng: 0 },
+        mapTypeId: 'terrain',
+      });
+      setStatus('Carte prête. Choisis un fichier KML.');
+      $('kmlFile').addEventListener('change', e => loadLocalKml(e.target.files[0]));
+      $('clearMap').addEventListener('click', clearMap);
+      $('toggleCluster').addEventListener('click', toggleClustering);
+      $('toggleMapType').addEventListener('click', toggleMapType);
+      $('centerOnPoints').addEventListener('click', centerOnPoints);
+      $('clearStorage').addEventListener('click', clearStorage);
+      
+      // Charger automatiquement les données sauvegardées
+      loadSavedKmlData();
+    };
+    
+    // Récupérer la clé API depuis l'API Vercel
+    async function loadGoogleMapsAPI() {
+      try {
+        const response = await fetch('/api/api-key');
+        const data = await response.json();
+        
+        if (data.apiKey) {
+          // Charger l'API Google Maps avec la clé récupérée
+          const script = document.createElement('script');
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&callback=initMap`;
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        } else {
+          console.error('Clé API non trouvée');
+          setStatus('Erreur: Clé API non trouvée');
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement de la clé API:', error);
+        setStatus('Erreur: Impossible de charger la clé API');
+      }
+    }
+    
+    // Charger l'API Google Maps au chargement de la page
+    loadGoogleMapsAPI();
+  </script>
+  <!-- Marker Clusterer -->
+  <script>
+    // Charger MarkerClusterer de manière asynchrone
+    function loadMarkerClusterer() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js';
+        script.onload = () => {
+          console.log('MarkerClusterer chargé');
+          resolve();
+        };
+        script.onerror = () => {
+          console.warn('Impossible de charger MarkerClusterer');
+          resolve(); // On continue même si MarkerClusterer n'est pas disponible
+        };
+        document.head.appendChild(script);
+      });
+    }
+    
+    // Charger MarkerClusterer au chargement de la page
+    loadMarkerClusterer();
+  </script>
+
+  <script>
+    let map;
+    let markers = [];
+    let clusterer = null;
+    let clusteringEnabled = true;
+    let currentMapType = 'terrain';
+
+    const $ = id => document.getElementById(id);
+    const setErr = msg => { const e=$('err'); e.textContent = msg; e.style.display = msg ? 'block' : 'none'; console.error(msg); };
+    const setStatus = msg => $('status').textContent = msg;
+
+    function clearMap() {
+      setErr('');
+      // Remove markers
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+      // Remove clusterer
+      if (clusterer) { clusterer.clearMarkers(); clusterer = null; }
+      $('kmlFile').value = '';
+      $('stats').style.display = 'none';
+      $('centerOnPoints').style.display = 'none';
+      $('clearStorage').style.display = 'none';
+      setStatus('Carte effacée');
+    }
+
+    function toggleClustering() {
+      clusteringEnabled = !clusteringEnabled;
+      $('clState').textContent = clusteringEnabled ? 'ON' : 'OFF';
+      // Re-applique l'affichage actuel
+      if (markers.length) applyMarkers(markers.map(m => m.__data));
+    }
+
+    function toggleMapType() {
+      if (currentMapType === 'terrain') {
+        currentMapType = 'satellite';
+        map.setMapTypeId('satellite');
+        $('mapTypeState').textContent = 'Satellite';
+      } else {
+        currentMapType = 'terrain';
+        map.setMapTypeId('terrain');
+        $('mapTypeState').textContent = 'Plan';
+      }
+    }
+
+    function centerOnPoints() {
+      if (markers.length === 0) return;
+      
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach(marker => bounds.extend(marker.getPosition()));
+      
+      if (!bounds.isEmpty()) {
+        if (markers.length === 1) {
+          map.setCenter(bounds.getCenter());
+          map.setZoom(12);
+        } else {
+          map.fitBounds(bounds, { padding: 30 });
+        }
+      }
+    }
+
+    // Charger les données KML sauvegardées
+    function loadSavedKmlData() {
+      try {
+        const savedData = localStorage.getItem('kmlData');
+        if (savedData) {
+          const kmlData = JSON.parse(savedData);
+          console.log('Données KML trouvées dans localStorage:', kmlData.fileName);
+          
+          setStatus(`Données restaurées: ${kmlData.fileName} — ${kmlData.points.length} points`);
+          $('stats').style.display = 'block';
+          $('stats').innerHTML = `<b>${kmlData.points.length}</b> points affichés ${kmlData.countNoPoint ? '(+'+kmlData.countNoPoint+' sans géométrie ignorés)' : ''}`;
+          $('centerOnPoints').style.display = 'inline-block';
+          $('clearStorage').style.display = 'inline-block';
+          
+          applyMarkers(kmlData.points);
+        } else {
+          console.log('Aucune donnée KML sauvegardée trouvée');
+        }
+      } catch (e) {
+        console.error('Erreur lors du chargement des données sauvegardées:', e);
+      }
+    }
+
+    // Effacer les données sauvegardées
+    function clearStorage() {
+      if (confirm('Êtes-vous sûr de vouloir effacer les données sauvegardées ?')) {
+        localStorage.removeItem('kmlData');
+        clearMap();
+        setStatus('Données sauvegardées effacées');
+        $('clearStorage').style.display = 'none';
+        console.log('Données KML effacées du localStorage');
+      }
+    }
+
+    function loadLocalKml(file) {
+      if (!file) return;
+      clearMap();
+      setStatus('Lecture du fichier…');
+      const reader = new FileReader();
+      reader.onerror = () => setErr('Erreur de lecture du fichier.');
+      reader.onload = () => {
+        try {
+          const text = reader.result;
+          if (!/<\s*kml[\s>]/i.test(text)) { setErr('Le fichier ne semble pas être un KML valide.'); return; }
+          const { points, countNoPoint } = extractPointsFromKml(text);
+          if (!points.length) { setErr('Aucun <Point><coordinates> trouvé dans le KML.'); return; }
+          setStatus(`Fichier chargé avec succès: ${file.name} — ${points.length} points`);
+          $('stats').style.display = 'block';
+          $('stats').innerHTML = `<b>${points.length}</b> points affichés ${countNoPoint ? '(+'+countNoPoint+' sans géométrie ignorés)' : ''}`;
+          $('centerOnPoints').style.display = 'inline-block';
+          $('clearStorage').style.display = 'inline-block';
+          
+          // Sauvegarder les données dans localStorage
+          const kmlData = {
+            fileName: file.name,
+            kmlText: text,
+            points: points,
+            countNoPoint: countNoPoint,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem('kmlData', JSON.stringify(kmlData));
+          console.log('Données KML sauvegardées dans localStorage');
+          
+          applyMarkers(points);
+        } catch (e) {
+          setErr('Erreur de parsing KML : ' + e.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Parse le KML et retourne une liste {lat,lng,name,description}
+    function extractPointsFromKml(kmlText) {
+      const xml = new DOMParser().parseFromString(kmlText, 'text/xml');
+      const placemarks = [...xml.getElementsByTagName('Placemark')];
+      const points = [];
+      let countNoPoint = 0;
+
+      console.log(`Trouvé ${placemarks.length} Placemarks dans le KML`);
+
+      placemarks.forEach((pm, index) => {
+        let lat, lng;
+        
+        // Essayer d'abord les coordonnées directes
+        const coordsEl = pm.querySelector('Point > coordinates, point > coordinates, Coordinates');
+        if (coordsEl && coordsEl.textContent) {
+          const raw = coordsEl.textContent.trim();
+          const [lngStr, latStr] = raw.split(/[,\s]+/);
+          lng = parseFloat(lngStr);
+          lat = parseFloat(latStr);
+        }
+        
+        // Si pas de coordonnées, essayer de géocoder l'adresse
+        if ((!lat || !lng || Number.isNaN(lat) || Number.isNaN(lng))) {
+          const addressEl = pm.querySelector('address');
+          if (addressEl && addressEl.textContent) {
+            const address = addressEl.textContent.trim();
+            console.log(`Géocodage de l'adresse ${index + 1}/${placemarks.length}: ${address}`);
+            
+            // Pour l'instant, on va créer des points avec des coordonnées par défaut
+            // et laisser l'utilisateur géocoder manuellement si nécessaire
+            const name = (pm.querySelector('name')?.textContent || 'Point').trim();
+            let description = (pm.querySelector('description')?.textContent || '').trim();
+            
+            // Nettoyer la description HTML
+            if (description) {
+              console.log(`Description brute pour ${name}:`, description);
+              // Remplacer les <br> par des sauts de ligne
+              description = description.replace(/<br\s*\/?>/gi, '\n');
+              // Supprimer les autres balises HTML
+              description = description.replace(/<[^>]*>/g, '');
+              console.log(`Description nettoyée pour ${name}:`, description);
+            } else {
+              console.log(`Aucune description trouvée pour ${name}`);
+            }
+            
+            // Coordonnées par défaut (centre du monde) - sera remplacé par géocodage
+            points.push({ 
+              lat: 0, 
+              lng: 0, 
+              name, 
+              description,
+              address: address,
+              needsGeocoding: true
+            });
+            return;
+          }
+        }
+        
+        // Si on a des coordonnées valides
+        if (lat && lng && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+          const name = (pm.querySelector('name')?.textContent || 'Point').trim();
+          let description = (pm.querySelector('description')?.textContent || '').trim();
+          
+          // Nettoyer la description HTML
+          if (description) {
+            console.log(`Description brute pour ${name}:`, description);
+            // Remplacer les <br> par des sauts de ligne
+            description = description.replace(/<br\s*\/?>/gi, '\n');
+            // Supprimer les autres balises HTML
+            description = description.replace(/<[^>]*>/g, '');
+            console.log(`Description nettoyée pour ${name}:`, description);
+          } else {
+            console.log(`Aucune description trouvée pour ${name}`);
+          }
+          
+          points.push({ lat, lng, name, description });
+        } else {
+          countNoPoint++;
+        }
+      });
+
+      console.log(`Extraction terminée: ${points.length} points trouvés, ${countNoPoint} ignorés`);
+      return { points, countNoPoint };
+    }
+
+    // Place les marqueurs + fitBounds (+ clustering si activé)
+    function applyMarkers(points) {
+      // nettoie anciens
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+      if (clusterer) { clusterer.clearMarkers(); clusterer = null; }
+
+      const bounds = new google.maps.LatLngBounds();
+      const info = new google.maps.InfoWindow();
+      console.log('InfoWindow créé:', info);
+      let geocodingCount = 0;
+      const totalPoints = points.length;
+
+      points.forEach((p, index) => {
+        // Si le point a besoin de géocodage
+        if (p.needsGeocoding && p.address) {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ address: p.address }, (results, status) => {
+            geocodingCount++;
+            
+            if (status === 'OK' && results[0]) {
+              const location = results[0].geometry.location;
+              p.lat = location.lat();
+              p.lng = location.lng();
+              
+              const marker = new google.maps.Marker({
+                position: { lat: p.lat, lng: p.lng },
+                title: p.name,
+                map: clusteringEnabled ? null : map
+              });
+              marker.__data = p;
+
+              console.log(`Création popup pour ${p.name}:`, {
+                name: p.name,
+                description: p.description,
+                address: p.address
+              });
+              
+              const html = `<div style="min-width:280px;max-width:400px;font-family:Arial,sans-serif">
+                <div style="font-weight:600;font-size:16px;margin-bottom:8px;color:#333">${escapeHtml(p.name)}</div>
+                <div style="white-space:pre-wrap;font-size:14px;line-height:1.4;margin-bottom:8px;color:#555">${escapeHtml(p.description)}</div>
+                <div style="font-size:12px;color:#666;padding:6px;background:#f5f5f5;border-radius:4px;border-left:3px solid #4285f4">📍 ${escapeHtml(p.address)}</div>
+              </div>`;
+              marker.addListener('click', () => {
+                console.log(`Clic sur marqueur ${p.name}, ouverture popup`);
+                console.log('Contenu HTML du popup:', html);
+                info.setContent(html);
+                info.open(map, marker);
+              });
+
+              markers.push(marker);
+              bounds.extend(marker.getPosition());
+              
+              // Si c'est le dernier point à géocoder, appliquer le clustering et ajuster la vue
+              if (geocodingCount === totalPoints) {
+                applyClusteringAndBounds();
+              }
+            } else {
+              console.warn(`Géocodage échoué pour: ${p.address}`);
+              if (geocodingCount === totalPoints) {
+                applyClusteringAndBounds();
+              }
+            }
+          });
+        } else {
+          // Point avec coordonnées directes
+          const marker = new google.maps.Marker({
+            position: { lat: p.lat, lng: p.lng },
+            title: p.name,
+            map: clusteringEnabled ? null : map
+          });
+          marker.__data = p;
+
+          console.log(`Création popup pour ${p.name}:`, {
+            name: p.name,
+            description: p.description
+          });
+          
+          const html = `<div style="min-width:280px;max-width:400px;font-family:Arial,sans-serif">
+            <div style="font-weight:600;font-size:16px;margin-bottom:8px;color:#333">${escapeHtml(p.name)}</div>
+            <div style="white-space:pre-wrap;font-size:14px;line-height:1.4;color:#555">${escapeHtml(p.description)}</div>
+          </div>`;
+          marker.addListener('click', () => {
+            console.log(`Clic sur marqueur ${p.name}, ouverture popup`);
+            console.log('Contenu HTML du popup:', html);
+            info.setContent(html);
+            info.open(map, marker);
+          });
+
+          markers.push(marker);
+          bounds.extend(marker.getPosition());
+        }
+      });
+
+      // Fonction pour appliquer le clustering et ajuster la vue
+      function applyClusteringAndBounds() {
+        if (clusteringEnabled && window['@googlemaps/markerclusterer']) {
+          try {
+            const { MarkerClusterer } = window['@googlemaps/markerclusterer'];
+            clusterer = new MarkerClusterer({ map, markers });
+          } catch (e) {
+            console.warn('MarkerClusterer non disponible, affichage sans clustering:', e);
+            markers.forEach(m => m.setMap(map));
+          }
+        } else {
+          markers.forEach(m => m.setMap(map));
+        }
+
+        if (!bounds.isEmpty()) {
+          // Ajuster le zoom automatiquement selon le nombre de points
+          if (points.length === 1) {
+            map.setCenter(bounds.getCenter());
+            map.setZoom(10);
+          } else if (points.length <= 5) {
+            map.fitBounds(bounds, { padding: 50 });
+          } else {
+            map.fitBounds(bounds, { padding: 20 });
+          }
+        }
+      }
+
+      // Si aucun point n'a besoin de géocodage, appliquer immédiatement
+      if (geocodingCount === 0) {
+        applyClusteringAndBounds();
+      }
+    }
+
+    function escapeHtml(str='') {
+      return str.replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+      }[s]));
+    }
+  </script>
+</body>
+</html>
