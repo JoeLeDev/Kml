@@ -73,6 +73,9 @@
       
       // Essayer de charger le fichier KML pré-chargé
       loadPreloadedKml();
+      
+      // Démarrer la vérification périodique des mises à jour
+      startUpdateCheck();
     };
     
     // Récupérer la clé API depuis l'API Vercel
@@ -501,6 +504,33 @@
       if (geocodingCount === 0) {
         applyClusteringAndBounds();
       }
+    }
+
+    // Vérification périodique des mises à jour
+    function startUpdateCheck() {
+      // Vérifier toutes les 30 secondes si le fichier a été mis à jour
+      setInterval(async () => {
+        try {
+          const response = await fetch('/api/stats');
+          if (response.ok) {
+            const stats = await response.json();
+            const lastModified = stats.lastModified;
+            
+            // Vérifier si le fichier a été modifié
+            const savedData = localStorage.getItem('kmlData');
+            if (savedData) {
+              const kmlData = JSON.parse(savedData);
+              if (kmlData.lastModified !== lastModified) {
+                console.log('Mise à jour détectée, rechargement de la carte...');
+                setStatus('Mise à jour détectée, rechargement...');
+                loadPreloadedKml();
+              }
+            }
+          }
+        } catch (error) {
+          console.log('Erreur lors de la vérification des mises à jour:', error);
+        }
+      }, 30000);
     }
 
     function escapeHtml(str='') {

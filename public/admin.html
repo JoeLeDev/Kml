@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Administration - Carte KML</title>
+  <style>
+    :root { --bg:#f5f5f5; --primary:#667eea; --secondary:#764ba2; --ok:#22c55e; --danger:#ef4444; --warning:#f59e0b; }
+    * { box-sizing: border-box }
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg)}
+    
+    .header{background:linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%);color:#fff;padding:20px;text-align:center}
+    .header h1{margin:0;font-weight:600;font-size:24px}
+    .header p{margin:8px 0 0;opacity:0.9;font-size:14px}
+    
+    .container{max-width:800px;margin:0 auto;padding:20px}
+    .card{background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+    .card h2{margin:0 0 16px;color:#333;font-size:18px}
+    
+    .btn{padding:12px 24px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;transition:all 0.2s}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-success{background:var(--ok);color:#fff}
+    .btn-warning{background:var(--warning);color:#fff}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+    
+    .upload-area{border:2px dashed #ddd;border-radius:8px;padding:40px;text-align:center;margin:16px 0;transition:all 0.2s}
+    .upload-area:hover{border-color:var(--primary);background:#f8f9ff}
+    .upload-area.dragover{border-color:var(--primary);background:#f0f4ff}
+    
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:16px 0}
+    .stat{background:#f8f9fa;padding:16px;border-radius:8px;text-align:center}
+    .stat-value{font-size:24px;font-weight:600;color:var(--primary);margin:0}
+    .stat-label{font-size:12px;color:#666;margin:4px 0 0}
+    
+    .log{background:#f8f9fa;border-radius:8px;padding:16px;margin:16px 0;max-height:200px;overflow-y:auto;font-family:monospace;font-size:12px}
+    .log-entry{margin:4px 0;padding:4px 8px;border-radius:4px}
+    .log-success{background:#d1fae5;color:#065f46}
+    .log-error{background:#fee2e2;color:#991b1b}
+    .log-info{background:#dbeafe;color:#1e40af}
+    
+    .status{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+    .status-online{background:#d1fae5;color:#065f46}
+    .status-offline{background:#fee2e2;color:#991b1b}
+    
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔧 Administration - Carte KML</h1>
+    <p>Gérez votre carte en temps réel</p>
+  </div>
+
+  <div class="container">
+    <!-- Statut de connexion -->
+    <div class="card">
+      <h2>📊 Statut du système</h2>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span class="status status-online" id="connectionStatus">🟢 Connecté</span>
+        <span id="lastUpdate">Dernière mise à jour: Jamais</span>
+        <button class="btn btn-primary" onclick="checkStatus()">🔄 Vérifier</button>
+      </div>
+    </div>
+
+    <!-- Statistiques actuelles -->
+    <div class="card">
+      <h2>📈 Statistiques actuelles</h2>
+      <div class="stats" id="currentStats">
+        <div class="stat">
+          <div class="stat-value" id="totalPoints">-</div>
+          <div class="stat-label">Points totaux</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lastModified">-</div>
+          <div class="stat-label">Dernière modification</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="fileSize">-</div>
+          <div class="stat-label">Taille du fichier</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload de nouveau fichier -->
+    <div class="card">
+      <h2>📁 Mettre à jour le fichier KML</h2>
+      <div class="upload-area" id="uploadArea">
+        <div style="font-size:48px;margin-bottom:16px">📄</div>
+        <div style="font-size:16px;margin-bottom:8px">Glissez-déposez votre fichier KML ici</div>
+        <div style="font-size:14px;color:#666;margin-bottom:16px">ou cliquez pour sélectionner</div>
+        <input type="file" id="kmlFile" accept=".kml,.xml" style="display:none">
+        <button class="btn btn-primary" onclick="document.getElementById('kmlFile').click()">Choisir un fichier</button>
+      </div>
+      
+      <div style="margin-top:16px">
+        <button class="btn btn-success" id="uploadBtn" onclick="uploadKml()" disabled>🚀 Mettre à jour</button>
+        <button class="btn btn-warning" onclick="previewKml()" id="previewBtn" disabled>👁️ Prévisualiser</button>
+        <button class="btn btn-danger" onclick="resetKml()">🔄 Réinitialiser</button>
+      </div>
+    </div>
+
+    <!-- Prévisualisation -->
+    <div class="card hidden" id="previewCard">
+      <h2>👁️ Prévisualisation</h2>
+      <div id="previewContent"></div>
+    </div>
+
+    <!-- Logs -->
+    <div class="card">
+      <h2>📝 Journal des activités</h2>
+      <div class="log" id="logContainer">
+        <div class="log-entry log-info">Système initialisé</div>
+      </div>
+      <button class="btn btn-primary" onclick="clearLog()">🗑️ Effacer les logs</button>
+    </div>
+  </div>
+
+  <script>
+    let currentFile = null;
+    let isConnected = true;
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+      setupEventListeners();
+      loadCurrentStats();
+      startStatusCheck();
+    });
+
+    // Configuration des événements
+    function setupEventListeners() {
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('kmlFile');
+
+      // Drag & Drop
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+      });
+
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          handleFileSelect(files[0]);
+        }
+      });
+
+      // File input
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleFileSelect(e.target.files[0]);
+        }
+      });
+    }
+
+    // Gestion de la sélection de fichier
+    function handleFileSelect(file) {
+      if (!file.name.toLowerCase().endsWith('.kml') && !file.name.toLowerCase().endsWith('.xml')) {
+        addLog('Erreur: Veuillez sélectionner un fichier KML ou XML', 'error');
+        return;
+      }
+
+      currentFile = file;
+      document.getElementById('uploadBtn').disabled = false;
+      document.getElementById('previewBtn').disabled = false;
+      addLog(`Fichier sélectionné: ${file.name} (${formatFileSize(file.size)})`, 'info');
+    }
+
+    // Upload du fichier KML
+    async function uploadKml() {
+      if (!currentFile) return;
+
+      const formData = new FormData();
+      formData.append('kmlFile', currentFile);
+
+      try {
+        addLog('Upload en cours...', 'info');
+        
+        const response = await fetch('/api/update-kml', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          addLog(`✅ Fichier mis à jour avec succès! ${result.points} points trouvés`, 'success');
+          loadCurrentStats();
+          notifyClients();
+        } else {
+          const error = await response.json();
+          addLog(`❌ Erreur: ${error.message}`, 'error');
+        }
+      } catch (error) {
+        addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+      }
+    }
+
+    // Prévisualisation du fichier
+    function previewKml() {
+      if (!currentFile) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const kmlText = e.target.result;
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(kmlText, 'text/xml');
+        const placemarks = xml.getElementsByTagName('Placemark');
+        
+        let preview = `<h3>📊 Aperçu du fichier</h3>`;
+        preview += `<p><strong>Nom:</strong> ${currentFile.name}</p>`;
+        preview += `<p><strong>Taille:</strong> ${formatFileSize(currentFile.size)}</p>`;
+        preview += `<p><strong>Placemarks trouvés:</strong> ${placemarks.length}</p>`;
+        
+        if (placemarks.length > 0) {
+          preview += `<h4>Premiers points:</h4><ul>`;
+          for (let i = 0; i < Math.min(5, placemarks.length); i++) {
+            const name = placemarks[i].getElementsByTagName('name')[0]?.textContent || 'Sans nom';
+            preview += `<li>${name}</li>`;
+          }
+          if (placemarks.length > 5) {
+            preview += `<li>... et ${placemarks.length - 5} autres</li>`;
+          }
+          preview += `</ul>`;
+        }
+        
+        document.getElementById('previewContent').innerHTML = preview;
+        document.getElementById('previewCard').classList.remove('hidden');
+      };
+      reader.readAsText(currentFile);
+    }
+
+    // Charger les statistiques actuelles
+    async function loadCurrentStats() {
+      try {
+        const response = await fetch('/api/stats');
+        if (response.ok) {
+          const stats = await response.json();
+          document.getElementById('totalPoints').textContent = stats.points || '0';
+          document.getElementById('lastModified').textContent = stats.lastModified || 'Jamais';
+          document.getElementById('fileSize').textContent = stats.fileSize || '0 KB';
+          document.getElementById('lastUpdate').textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
+        }
+      } catch (error) {
+        addLog(`Erreur lors du chargement des statistiques: ${error.message}`, 'error');
+      }
+    }
+
+    // Vérifier le statut
+    async function checkStatus() {
+      try {
+        const response = await fetch('/api/status');
+        if (response.ok) {
+          isConnected = true;
+          document.getElementById('connectionStatus').textContent = '🟢 Connecté';
+          document.getElementById('connectionStatus').className = 'status status-online';
+          addLog('✅ Connexion au serveur établie', 'success');
+        } else {
+          throw new Error('Serveur non disponible');
+        }
+      } catch (error) {
+        isConnected = false;
+        document.getElementById('connectionStatus').textContent = '🔴 Déconnecté';
+        document.getElementById('connectionStatus').className = 'status status-offline';
+        addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+      }
+    }
+
+    // Notifier les clients
+    async function notifyClients() {
+      try {
+        await fetch('/api/notify-update', { method: 'POST' });
+        addLog('📢 Notification envoyée aux clients', 'info');
+      } catch (error) {
+        addLog(`Erreur lors de la notification: ${error.message}`, 'error');
+      }
+    }
+
+    // Réinitialiser
+    function resetKml() {
+      if (confirm('Êtes-vous sûr de vouloir réinitialiser le fichier KML ?')) {
+        currentFile = null;
+        document.getElementById('kmlFile').value = '';
+        document.getElementById('uploadBtn').disabled = true;
+        document.getElementById('previewBtn').disabled = true;
+        document.getElementById('previewCard').classList.add('hidden');
+        addLog('🔄 Fichier réinitialisé', 'info');
+      }
+    }
+
+    // Vérification périodique du statut
+    function startStatusCheck() {
+      setInterval(checkStatus, 30000); // Toutes les 30 secondes
+    }
+
+    // Ajouter une entrée au log
+    function addLog(message, type = 'info') {
+      const logContainer = document.getElementById('logContainer');
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Effacer les logs
+    function clearLog() {
+      document.getElementById('logContainer').innerHTML = '';
+      addLog('Journal effacé', 'info');
+    }
+
+    // Formater la taille de fichier
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+  </script>
+</body>
+</html>
