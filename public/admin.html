@@ -177,37 +177,25 @@
       if (!currentFile) return;
 
       try {
-        addLog('Upload en cours...', 'info');
+        addLog('Traitement du fichier...', 'info');
         
         // Lire le contenu du fichier
         const fileContent = await readFileAsText(currentFile);
         
-        const response = await fetch('/api/update-kml', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            kmlContent: fileContent,
-            fileName: currentFile.name
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          addLog(`✅ Fichier reçu avec succès! ${result.points} points trouvés`, 'success');
-          
-          // Mettre à jour le fichier local
-          await updateLocalKmlFile(result.kmlContent);
-          
-          loadCurrentStats();
-          notifyClients();
-        } else {
-          const error = await response.json();
-          addLog(`❌ Erreur: ${error.message}`, 'error');
-        }
+        // Traiter le fichier directement côté client
+        const points = (fileContent.match(/<Placemark>/g) || []).length;
+        addLog(`✅ Fichier traité! ${points} points trouvés`, 'success');
+        
+        // Mettre à jour le fichier local
+        await updateLocalKmlFile(fileContent, currentFile.name);
+        
+        // Ouvrir la carte mise à jour
+        setTimeout(() => {
+          window.open('/', '_blank');
+        }, 1000);
+        
       } catch (error) {
-        addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+        addLog(`❌ Erreur lors du traitement: ${error.message}`, 'error');
       }
     }
 
@@ -222,12 +210,11 @@
     }
 
     // Mettre à jour le fichier KML local
-    async function updateLocalKmlFile(kmlContent) {
+    async function updateLocalKmlFile(kmlContent, fileName) {
       try {
-        // Pour Vercel, on va utiliser une approche différente
-        // On va stocker le contenu dans localStorage et forcer le rechargement
+        // Stocker le contenu dans localStorage
         const kmlData = {
-          fileName: 'members.kml',
+          fileName: fileName || 'members.kml',
           kmlText: kmlContent,
           points: (kmlContent.match(/<Placemark>/g) || []).length,
           timestamp: new Date().toISOString(),
@@ -235,15 +222,15 @@
         };
         
         localStorage.setItem('kmlData', JSON.stringify(kmlData));
-        addLog('✅ Fichier KML mis à jour localement', 'success');
+        addLog('✅ Fichier KML sauvegardé localement', 'success');
         
-        // Rediriger vers la page principale pour recharger
-        setTimeout(() => {
-          window.open('/', '_blank');
-        }, 1000);
+        // Mettre à jour les statistiques
+        document.getElementById('totalPoints').textContent = kmlData.points;
+        document.getElementById('lastModified').textContent = kmlData.lastModified;
+        document.getElementById('fileSize').textContent = formatFileSize(kmlContent.length);
         
       } catch (error) {
-        addLog(`❌ Erreur lors de la mise à jour locale: ${error.message}`, 'error');
+        addLog(`❌ Erreur lors de la sauvegarde: ${error.message}`, 'error');
       }
     }
 

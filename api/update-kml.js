@@ -5,24 +5,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Vérifier que le fichier est présent
-    if (!req.body || !req.body.kmlContent) {
+    // Vérifier que le contenu est présent
+    if (!req.body) {
+      return res.status(400).json({ error: 'Aucune donnée fournie' });
+    }
+
+    const { kmlContent, fileName } = req.body;
+
+    if (!kmlContent) {
       return res.status(400).json({ error: 'Aucun contenu KML fourni' });
     }
 
-    // Pour Vercel, on ne peut pas écrire directement sur le système de fichiers
-    // On va retourner les données pour que le client les sauvegarde
-    const kmlContent = req.body.kmlContent;
+    // Analyser le fichier pour compter les points
     const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
     // Log de l'opération
     console.log(`Fichier KML reçu: ${placemarks} points trouvés`);
 
+    // Retourner les données pour que le client les sauvegarde
     res.status(200).json({
       success: true,
-      message: 'Fichier KML reçu avec succès',
+      message: 'Fichier KML traité avec succès',
       points: placemarks,
-      kmlContent: kmlContent,
+      fileName: fileName || 'members.kml',
       timestamp: new Date().toISOString()
     });
 
