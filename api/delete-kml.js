@@ -1,4 +1,4 @@
-import { getDatabase } from './db.js';
+import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
   if (req.method !== 'DELETE') {
@@ -6,25 +6,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const db = getDatabase();
+    // Supprimer le fichier de Vercel KV
+    await kv.del('kml_file');
     
-    // Supprimer le fichier de la base de données
-    const result = db.prepare('DELETE FROM kml_files WHERE name = ?').run('members.kml');
+    console.log('Fichier KML supprimé de Vercel KV');
     
-    if (result.changes > 0) {
-      console.log('Fichier KML supprimé de la base de données');
-      
-      res.status(200).json({
-        success: true,
-        message: 'Fichier KML supprimé avec succès',
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(404).json({
-        error: 'Fichier KML non trouvé',
-        message: 'Aucun fichier à supprimer'
-      });
-    }
+    res.status(200).json({
+      success: true,
+      message: 'Fichier KML supprimé avec succès',
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error) {
     console.error('Erreur lors de la suppression du fichier KML:', error);

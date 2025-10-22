@@ -1,4 +1,4 @@
-import { getDatabase } from './db.js';
+import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,16 +6,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const db = getDatabase();
-    
-    // Récupérer le fichier KML depuis la base de données
-    const kmlFile = db.prepare('SELECT * FROM kml_files WHERE name = ? ORDER BY updated_at DESC LIMIT 1').get('members.kml');
+    // Récupérer le fichier KML depuis Vercel KV
+    const kmlFile = await kv.get('kml_file');
     
     if (kmlFile) {
       res.status(200).json({
         success: true,
         data: {
-          id: kmlFile.id,
           name: kmlFile.name,
           content: kmlFile.content,
           points: kmlFile.points,
@@ -26,7 +23,7 @@ export default async function handler(req, res) {
     } else {
       res.status(404).json({
         error: 'Fichier KML non trouvé',
-        message: 'Aucun fichier KML trouvé dans la base de données'
+        message: 'Aucun fichier KML trouvé dans Vercel KV'
       });
     }
 

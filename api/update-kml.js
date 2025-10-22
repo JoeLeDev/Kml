@@ -1,4 +1,4 @@
-import { getDatabase } from './db.js';
+import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
   // Vérifier la méthode HTTP
@@ -21,30 +21,18 @@ export default async function handler(req, res) {
     // Analyser le fichier pour compter les points
     const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
-    // Sauvegarder dans la base de données
-    const db = getDatabase();
+    // Sauvegarder dans Vercel KV
+    const kmlData = {
+      name: fileName || 'members.kml',
+      content: kmlContent,
+      points: placemarks,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await kv.set('kml_file', kmlData);
     
-    // Vérifier s'il existe déjà un fichier
-    const existing = db.prepare('SELECT id FROM kml_files WHERE name = ?').get(fileName || 'members.kml');
-    
-    if (existing) {
-      // Mettre à jour le fichier existant
-      db.prepare(`
-        UPDATE kml_files 
-        SET content = ?, points = ?, updated_at = CURRENT_TIMESTAMP 
-        WHERE name = ?
-      `).run(kmlContent, placemarks, fileName || 'members.kml');
-      
-      console.log(`Fichier KML mis à jour dans la base de données: ${placemarks} points`);
-    } else {
-      // Créer un nouveau fichier
-      db.prepare(`
-        INSERT INTO kml_files (name, content, points) 
-        VALUES (?, ?, ?)
-      `).run(fileName || 'members.kml', kmlContent, placemarks);
-      
-      console.log(`Nouveau fichier KML créé dans la base de données: ${placemarks} points`);
-    }
+    console.log(`Fichier KML sauvegardé dans Vercel KV: ${placemarks} points`);
 
     // Retourner les données
     res.status(200).json({
