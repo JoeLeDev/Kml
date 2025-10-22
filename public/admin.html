@@ -214,13 +214,14 @@
     // Mettre à jour le fichier KML local
     async function updateLocalKmlFile(kmlContent, fileName) {
       try {
-        // Stocker le contenu dans localStorage
+        // Stocker le contenu dans localStorage avec versioning
         const kmlData = {
           fileName: fileName || 'members.kml',
           kmlText: kmlContent,
           points: (kmlContent.match(/<Placemark>/g) || []).length,
           timestamp: new Date().toISOString(),
-          lastModified: new Date().toLocaleString('fr-FR')
+          lastModified: new Date().toLocaleString('fr-FR'),
+          version: Date.now() // Version unique pour forcer la mise à jour
         };
         
         localStorage.setItem('kmlData', JSON.stringify(kmlData));
@@ -364,6 +365,18 @@
         // Supprimer les données du localStorage
         localStorage.removeItem('kmlData');
         
+        // Forcer la mise à jour en créant un fichier "vide"
+        const emptyKml = {
+          fileName: 'empty.kml',
+          kmlText: '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Empty Map</name></Document></kml>',
+          points: 0,
+          timestamp: new Date().toISOString(),
+          lastModified: new Date().toLocaleString('fr-FR'),
+          version: Date.now() // Version unique pour forcer la mise à jour
+        };
+        
+        localStorage.setItem('kmlData', JSON.stringify(emptyKml));
+        
         // Réinitialiser l'interface
         currentFile = null;
         document.getElementById('kmlFile').value = '';
@@ -376,7 +389,7 @@
         document.getElementById('lastModified').textContent = 'Jamais';
         document.getElementById('fileSize').textContent = '0 KB';
         
-        addLog('🗑️ Fichier KML supprimé', 'success');
+        addLog('🗑️ Fichier KML supprimé - Mise à jour forcée', 'success');
         
         // Ouvrir la carte vide
         setTimeout(() => {

@@ -534,6 +534,23 @@
           console.log('Erreur lors de la vérification des mises à jour:', error);
         }
       }, 30000);
+      
+      // Vérification locale du versioning
+      setInterval(() => {
+        const savedData = localStorage.getItem('kmlData');
+        if (savedData) {
+          const kmlData = JSON.parse(savedData);
+          const currentVersion = kmlData.version;
+          const lastVersion = localStorage.getItem('lastKmlVersion');
+          
+          if (currentVersion && currentVersion !== lastVersion) {
+            console.log('Nouvelle version détectée, rechargement de la carte...');
+            setStatus('Nouvelle version détectée, rechargement...');
+            localStorage.setItem('lastKmlVersion', currentVersion);
+            loadPreloadedKml();
+          }
+        }
+      }, 5000); // Vérification toutes les 5 secondes
     }
 
     function escapeHtml(str='') {
