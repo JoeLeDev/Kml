@@ -70,6 +70,9 @@
       
       // Charger automatiquement les données sauvegardées
       loadSavedKmlData();
+      
+      // Essayer de charger le fichier KML pré-chargé
+      loadPreloadedKml();
     };
     
     // Récupérer la clé API depuis l'API Vercel
@@ -178,6 +181,42 @@
         } else {
           map.fitBounds(bounds, { padding: 30 });
         }
+      }
+    }
+
+    // Charger le fichier KML pré-chargé depuis le serveur
+    async function loadPreloadedKml() {
+      try {
+        const response = await fetch('/data/members.kml');
+        if (response.ok) {
+          const kmlText = await response.text();
+          console.log('Fichier KML pré-chargé trouvé');
+          
+          const { points, countNoPoint } = extractPointsFromKml(kmlText);
+          if (points.length > 0) {
+            setStatus(`Carte chargée automatiquement — ${points.length} points`);
+            $('stats').style.display = 'block';
+            $('stats').innerHTML = `<b>${points.length}</b> points affichés ${countNoPoint ? '(+'+countNoPoint+' sans géométrie ignorés)' : ''}`;
+            $('centerOnPoints').style.display = 'inline-block';
+            $('clearStorage').style.display = 'inline-block';
+            
+            // Sauvegarder les données dans localStorage
+            const kmlData = {
+              fileName: 'members.kml',
+              kmlText: kmlText,
+              points: points,
+              countNoPoint: countNoPoint,
+              timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('kmlData', JSON.stringify(kmlData));
+            
+            applyMarkers(points);
+          }
+        } else {
+          console.log('Aucun fichier KML pré-chargé trouvé');
+        }
+      } catch (error) {
+        console.log('Erreur lors du chargement du fichier pré-chargé:', error);
       }
     }
 
