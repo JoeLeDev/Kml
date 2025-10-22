@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin KML Map</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🗺️ Admin KML Map</h1>
+
+    <!-- Statistiques actuelles -->
+    <div class="card">
+      <h2>📊 Statistiques actuelles</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="value" id="totalPoints">0</div>
+          <div class="label">Points</div>
+        </div>
+        <div class="stat-item">
+          <div class="value" id="fileSize">0 KB</div>
+          <div class="label">Taille du fichier</div>
+        </div>
+        <div class="stat-item">
+          <div class="value" id="lastModified">N/A</div>
+          <div class="label">Dernière modification</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload de fichier -->
+    <div class="card">
+      <h2>📁 Mettre à jour le fichier KML</h2>
+      <div id="dropArea" class="drop-area">
+        Glissez-déposez votre fichier KML ici ou cliquez pour sélectionner
+        <input type="file" id="kmlFile" accept=".kml,.xml" style="display:none">
+        <button class="btn btn-primary" onclick="document.getElementById('kmlFile').click()">Choisir un fichier</button>
+      </div>
+      <div id="fileNameDisplay" style="margin-bottom: 10px; font-size: 14px; color: #555;">Aucun fichier sélectionné</div>
+      
+      <div class="flex-group">
+        <button class="btn btn-success" id="uploadBtn" onclick="uploadKml()" disabled>🚀 Mettre à jour</button>
+        <button class="btn btn-warning" onclick="previewKml()" id="previewBtn" disabled>👁️ Prévisualiser</button>
+        <button class="btn btn-primary" onclick="downloadKml()" id="downloadBtn">📥 Télécharger le fichier</button>
+        <button class="btn btn-danger" onclick="resetKml()">🔄 Réinitialiser</button>
+        <button class="btn btn-danger" onclick="deleteKml()">🗑️ Supprimer le fichier</button>
+      </div>
+    </div>
+
+    <!-- Prévisualisation -->
+    <div class="card hidden" id="previewCard">
+      <h2>👁️ Prévisualisation KML</h2>
+      <textarea id="kmlPreview" readonly></textarea>
+    </div>
+
+    <!-- Journal des activités -->
+    <div class="card">
+      <h2>📝 Journal des activités</h2>
+      <div id="log" style="max-height: 200px; overflow-y: auto; background:#f0f4f8; padding: 10px; border-radius: 6px;">
+        <div class="log-entry log-info">Bienvenue sur l'interface d'administration.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
