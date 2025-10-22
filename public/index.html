@@ -193,30 +193,37 @@
     // Charger le fichier KML pré-chargé depuis le serveur
     async function loadPreloadedKml() {
       try {
-        const response = await fetch('/data/members.kml');
+        // Essayer de charger depuis la base de données
+        const response = await fetch('/api/get-kml');
         if (response.ok) {
-          const kmlText = await response.text();
-          console.log('Fichier KML pré-chargé trouvé');
-          
-          const { points, countNoPoint } = extractPointsFromKml(kmlText);
-          if (points.length > 0) {
-            setStatus(`Carte chargée automatiquement — ${points.length} points`);
-            $('stats').style.display = 'block';
-            $('stats').innerHTML = `<b>${points.length}</b> points affichés ${countNoPoint ? '(+'+countNoPoint+' sans géométrie ignorés)' : ''}`;
-            $('centerOnPoints').style.display = 'inline-block';
-            $('clearStorage').style.display = 'inline-block';
+          const result = await response.json();
+          if (result.success && result.data) {
+            const kmlText = result.data.content;
+            console.log('Fichier KML chargé depuis la base de données');
             
-            // Sauvegarder les données dans localStorage
-            const kmlData = {
-              fileName: 'members.kml',
-              kmlText: kmlText,
-              points: points,
-              countNoPoint: countNoPoint,
-              timestamp: new Date().toISOString()
-            };
-            localStorage.setItem('kmlData', JSON.stringify(kmlData));
-            
-            applyMarkers(points);
+            const { points, countNoPoint } = extractPointsFromKml(kmlText);
+            if (points.length > 0) {
+              setStatus(`Carte chargée automatiquement — ${points.length} points`);
+              $('stats').style.display = 'block';
+              $('stats').innerHTML = `<b>${points.length}</b> points affichés ${countNoPoint ? '(+'+countNoPoint+' sans géométrie ignorés)' : ''}`;
+              $('centerOnPoints').style.display = 'inline-block';
+              $('clearStorage').style.display = 'inline-block';
+              
+              // Sauvegarder les données dans localStorage
+              const kmlData = {
+                fileName: result.data.name,
+                kmlText: kmlText,
+                points: points,
+                countNoPoint: countNoPoint,
+                timestamp: result.data.updatedAt,
+                version: Date.now()
+              };
+              localStorage.setItem('kmlData', JSON.stringify(kmlData));
+              
+              applyMarkers(points);
+            }
+          } else {
+            console.log('Aucun fichier KML trouvé dans la base de données');
           }
         } else {
           console.log('Aucun fichier KML pré-chargé trouvé');

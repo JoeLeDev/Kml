@@ -96,6 +96,7 @@
       <div style="margin-top:16px">
         <button class="btn btn-success" id="uploadBtn" onclick="uploadKml()" disabled>🚀 Mettre à jour</button>
         <button class="btn btn-warning" onclick="previewKml()" id="previewBtn" disabled>👁️ Prévisualiser</button>
+        <button class="btn btn-primary" onclick="downloadKml()" id="downloadBtn">📥 Télécharger le fichier</button>
         <button class="btn btn-danger" onclick="resetKml()">🔄 Réinitialiser</button>
         <button class="btn btn-danger" onclick="deleteKml()">🗑️ Supprimer le fichier</button>
       </div>
@@ -187,29 +188,16 @@
         const points = (fileContent.match(/<Placemark>/g) || []).length;
         addLog(`✅ Fichier traité! ${points} points trouvés`, 'success');
         
-        // Mettre à jour le fichier sur le serveur
-        const response = await fetch('/api/update-kml', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ kmlContent: fileContent })
-        });
+        // Sauvegarder dans localStorage pour ce navigateur
+        await updateLocalKmlFile(fileContent, currentFile.name);
         
-        if (response.ok) {
-          // Mettre à jour le fichier local
-          await updateLocalKmlFile(fileContent, currentFile.name);
-          
-          addLog('✅ Fichier KML mis à jour sur le serveur et localement', 'success');
-          
-          // Ouvrir la carte mise à jour
-          setTimeout(() => {
-            window.open('/', '_blank');
-          }, 1000);
-        } else {
-          const error = await response.json();
-          addLog(`❌ Erreur serveur: ${error.error}`, 'error');
-        }
+        addLog('✅ Fichier KML sauvegardé localement', 'success');
+        addLog('⚠️ Pour synchroniser tous les navigateurs, remplacez manuellement le fichier public/data/members.kml sur Vercel', 'warning');
+        
+        // Ouvrir la carte mise à jour
+        setTimeout(() => {
+          window.open('/', '_blank');
+        }, 1000);
         
       } catch (error) {
         addLog(`❌ Erreur lors du traitement: ${error.message}`, 'error');

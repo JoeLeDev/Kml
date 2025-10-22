@@ -1,5 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { getDatabase } from './db.js';
 
 export default async function handler(req, res) {
   // Vérifier la méthode HTTP
@@ -22,23 +21,35 @@ export default async function handler(req, res) {
     // Analyser le fichier pour compter les points
     const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
-    // Écrire le fichier sur le serveur
-    const dataDir = path.join(process.cwd(), 'public', 'data');
-    const filePath = path.join(dataDir, 'members.kml');
-
-    // Créer le dossier s'il n'existe pas
-    await fs.mkdir(dataDir, { recursive: true });
+    // Sauvegarder dans la base de données
+    const db = getDatabase();
     
-    // Écrire le fichier sur le serveur
-    await fs.writeFile(filePath, kmlContent, 'utf8');
-
-    // Log de l'opération
-    console.log(`Fichier KML mis à jour sur le serveur: ${placemarks} points`);
+    // Vérifier s'il existe déjà un fichier
+    const existing = db.prepare('SELECT id FROM kml_files WHERE name = ?').get(fileName || 'members.kml');
+    
+    if (existing) {
+      // Mettre à jour le fichier existant
+      db.prepare(`
+        UPDATE kml_files 
+        SET content = ?, points = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE name = ?
+      `).run(kmlContent, placemarks, fileName || 'members.kml');
+      
+      console.log(`Fichier KML mis à jour dans la base de données: ${placemarks} points`);
+    } else {
+      // Créer un nouveau fichier
+      db.prepare(`
+        INSERT INTO kml_files (name, content, points) 
+        VALUES (?, ?, ?)
+      `).run(fileName || 'members.kml', kmlContent, placemarks);
+      
+      console.log(`Nouveau fichier KML créé dans la base de données: ${placemarks} points`);
+    }
 
     // Retourner les données
     res.status(200).json({
       success: true,
-      message: 'Fichier KML mis à jour avec succès',
+      message: 'Fichier KML sauvegardé avec succès',
       points: placemarks,
       fileName: fileName || 'members.kml',
       timestamp: new Date().toISOString()
