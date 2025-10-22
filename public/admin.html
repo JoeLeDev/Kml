@@ -96,7 +96,9 @@
       <div style="margin-top:16px">
         <button class="btn btn-success" id="uploadBtn" onclick="uploadKml()" disabled>🚀 Mettre à jour</button>
         <button class="btn btn-warning" onclick="previewKml()" id="previewBtn" disabled>👁️ Prévisualiser</button>
+        <button class="btn btn-primary" onclick="editKml()" id="editBtn">✏️ Modifier le fichier actuel</button>
         <button class="btn btn-danger" onclick="resetKml()">🔄 Réinitialiser</button>
+        <button class="btn btn-danger" onclick="deleteKml()">🗑️ Supprimer le fichier</button>
       </div>
     </div>
 
@@ -323,6 +325,63 @@
         document.getElementById('previewBtn').disabled = true;
         document.getElementById('previewCard').classList.add('hidden');
         addLog('🔄 Fichier réinitialisé', 'info');
+      }
+    }
+
+    // Modifier le fichier KML actuel
+    function editKml() {
+      const savedData = localStorage.getItem('kmlData');
+      if (!savedData) {
+        addLog('❌ Aucun fichier KML trouvé à modifier', 'error');
+        return;
+      }
+      
+      try {
+        const kmlData = JSON.parse(savedData);
+        addLog(`✏️ Modification du fichier: ${kmlData.fileName}`, 'info');
+        
+        // Ouvrir l'éditeur de texte simple
+        const newContent = prompt('Modifiez le contenu KML (attention: format XML requis):', kmlData.kmlText);
+        
+        if (newContent && newContent !== kmlData.kmlText) {
+          // Mettre à jour le fichier
+          updateLocalKmlFile(newContent, kmlData.fileName);
+          addLog('✅ Fichier KML modifié avec succès', 'success');
+          
+          // Ouvrir la carte mise à jour
+          setTimeout(() => {
+            window.open('/', '_blank');
+          }, 1000);
+        }
+      } catch (error) {
+        addLog(`❌ Erreur lors de la modification: ${error.message}`, 'error');
+      }
+    }
+
+    // Supprimer le fichier KML
+    function deleteKml() {
+      if (confirm('Êtes-vous sûr de vouloir supprimer le fichier KML ? Cette action effacera toutes les données de la carte.')) {
+        // Supprimer les données du localStorage
+        localStorage.removeItem('kmlData');
+        
+        // Réinitialiser l'interface
+        currentFile = null;
+        document.getElementById('kmlFile').value = '';
+        document.getElementById('uploadBtn').disabled = true;
+        document.getElementById('previewBtn').disabled = true;
+        document.getElementById('previewCard').classList.add('hidden');
+        
+        // Mettre à jour les statistiques
+        document.getElementById('totalPoints').textContent = '0';
+        document.getElementById('lastModified').textContent = 'Jamais';
+        document.getElementById('fileSize').textContent = '0 KB';
+        
+        addLog('🗑️ Fichier KML supprimé', 'success');
+        
+        // Ouvrir la carte vide
+        setTimeout(() => {
+          window.open('/', '_blank');
+        }, 1000);
       }
     }
 
