@@ -1,4 +1,16 @@
-import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
+
+let redisClient = null;
+
+async function getRedisClient() {
+  if (!redisClient) {
+    redisClient = createClient({
+      url: process.env.REDIS_URL || 'redis://localhost:6379'
+    });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,10 +18,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Récupérer le fichier KML depuis Vercel KV
-    const kmlFile = await kv.get('kml_file');
+    // Récupérer le fichier KML depuis Redis
+    const client = await getRedisClient();
+    const kmlFileData = await client.get('kml_file');
     
-    if (kmlFile) {
+    if (kmlFileData) {
+      const kmlFile = JSON.parse(kmlFileData);
       res.status(200).json({
         success: true,
         data: {
@@ -23,7 +37,7 @@ export default async function handler(req, res) {
     } else {
       res.status(404).json({
         error: 'Fichier KML non trouvé',
-        message: 'Aucun fichier KML trouvé dans Vercel KV'
+        message: 'Aucun fichier KML trouvé dans Redis'
       });
     }
 

@@ -1,4 +1,16 @@
-import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
+
+let redisClient = null;
+
+async function getRedisClient() {
+  if (!redisClient) {
+    redisClient = createClient({
+      url: process.env.REDIS_URL || 'redis://localhost:6379'
+    });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'DELETE') {
@@ -6,10 +18,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Supprimer le fichier de Vercel KV
-    await kv.del('kml_file');
+    // Supprimer le fichier de Redis
+    const client = await getRedisClient();
+    await client.del('kml_file');
     
-    console.log('Fichier KML supprimé de Vercel KV');
+    console.log('Fichier KML supprimé de Redis');
     
     res.status(200).json({
       success: true,

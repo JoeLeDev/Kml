@@ -1,4 +1,16 @@
-import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
+
+let redisClient = null;
+
+async function getRedisClient() {
+  if (!redisClient) {
+    redisClient = createClient({
+      url: process.env.REDIS_URL || 'redis://localhost:6379'
+    });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
 
 export default async function handler(req, res) {
   // Vérifier la méthode HTTP
@@ -21,7 +33,7 @@ export default async function handler(req, res) {
     // Analyser le fichier pour compter les points
     const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
-    // Sauvegarder dans Vercel KV
+    // Sauvegarder dans Redis
     const kmlData = {
       name: fileName || 'members.kml',
       content: kmlContent,
@@ -30,9 +42,10 @@ export default async function handler(req, res) {
       updated_at: new Date().toISOString()
     };
 
-    await kv.set('kml_file', kmlData);
+    const client = await getRedisClient();
+    await client.set('kml_file', JSON.stringify(kmlData));
     
-    console.log(`Fichier KML sauvegardé dans Vercel KV: ${placemarks} points`);
+    console.log(`Fichier KML sauvegardé dans Redis: ${placemarks} points`);
 
     // Retourner les données
     res.status(200).json({
