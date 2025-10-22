@@ -96,7 +96,6 @@
       <div style="margin-top:16px">
         <button class="btn btn-success" id="uploadBtn" onclick="uploadKml()" disabled>🚀 Mettre à jour</button>
         <button class="btn btn-warning" onclick="previewKml()" id="previewBtn" disabled>👁️ Prévisualiser</button>
-        <button class="btn btn-primary" onclick="editKml()" id="editBtn">✏️ Modifier le fichier actuel</button>
         <button class="btn btn-danger" onclick="resetKml()">🔄 Réinitialiser</button>
         <button class="btn btn-danger" onclick="deleteKml()">🗑️ Supprimer le fichier</button>
       </div>
@@ -188,13 +187,29 @@
         const points = (fileContent.match(/<Placemark>/g) || []).length;
         addLog(`✅ Fichier traité! ${points} points trouvés`, 'success');
         
-        // Mettre à jour le fichier local
-        await updateLocalKmlFile(fileContent, currentFile.name);
+        // Mettre à jour le fichier sur le serveur
+        const response = await fetch('/api/update-kml', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ kmlContent: fileContent })
+        });
         
-        // Ouvrir la carte mise à jour
-        setTimeout(() => {
-          window.open('/', '_blank');
-        }, 1000);
+        if (response.ok) {
+          // Mettre à jour le fichier local
+          await updateLocalKmlFile(fileContent, currentFile.name);
+          
+          addLog('✅ Fichier KML mis à jour sur le serveur et localement', 'success');
+          
+          // Ouvrir la carte mise à jour
+          setTimeout(() => {
+            window.open('/', '_blank');
+          }, 1000);
+        } else {
+          const error = await response.json();
+          addLog(`❌ Erreur serveur: ${error.error}`, 'error');
+        }
         
       } catch (error) {
         addLog(`❌ Erreur lors du traitement: ${error.message}`, 'error');
@@ -329,72 +344,61 @@
       }
     }
 
-    // Modifier le fichier KML actuel
-    function editKml() {
-      const savedData = localStorage.getItem('kmlData');
-      if (!savedData) {
-        addLog('❌ Aucun fichier KML trouvé à modifier', 'error');
-        return;
-      }
-      
-      try {
-        const kmlData = JSON.parse(savedData);
-        addLog(`✏️ Modification du fichier: ${kmlData.fileName}`, 'info');
-        
-        // Ouvrir l'éditeur de texte simple
-        const newContent = prompt('Modifiez le contenu KML (attention: format XML requis):', kmlData.kmlText);
-        
-        if (newContent && newContent !== kmlData.kmlText) {
-          // Mettre à jour le fichier
-          updateLocalKmlFile(newContent, kmlData.fileName);
-          addLog('✅ Fichier KML modifié avec succès', 'success');
-          
-          // Ouvrir la carte mise à jour
-          setTimeout(() => {
-            window.open('/', '_blank');
-          }, 1000);
-        }
-      } catch (error) {
-        addLog(`❌ Erreur lors de la modification: ${error.message}`, 'error');
-      }
-    }
 
     // Supprimer le fichier KML
-    function deleteKml() {
+    async function deleteKml() {
       if (confirm('Êtes-vous sûr de vouloir supprimer le fichier KML ? Cette action effacera toutes les données de la carte.')) {
-        // Supprimer les données du localStorage
-        localStorage.removeItem('kmlData');
-        
-        // Forcer la mise à jour en créant un fichier "vide"
-        const emptyKml = {
-          fileName: 'empty.kml',
-          kmlText: '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Empty Map</name></Document></kml>',
-          points: 0,
-          timestamp: new Date().toISOString(),
-          lastModified: new Date().toLocaleString('fr-FR'),
-          version: Date.now() // Version unique pour forcer la mise à jour
-        };
-        
-        localStorage.setItem('kmlData', JSON.stringify(emptyKml));
-        
-        // Réinitialiser l'interface
-        currentFile = null;
-        document.getElementById('kmlFile').value = '';
-        document.getElementById('uploadBtn').disabled = true;
-        document.getElementById('previewBtn').disabled = true;
-        document.getElementById('previewCard').classList.add('hidden');
-        
-        // Mettre à jour les statistiques
-        document.getElementById('totalPoints').textContent = '0';
-        document.getElementById('lastModified').textContent = 'Jamais';
-        document.getElementById('fileSize').textContent = '0 KB';
-        
-        addLog('🗑️ Fichier KML supprimé - Mise à jour forcée', 'success');
-        
-        // Ouvrir la carte vide
-        setTimeout(() => {
-          window.open('/', '_blank');
-        }, 1000);
+        try {
+          addLog('🗑️ Suppression du fichier KML...', 'info');
+          
+          // Supprimer le fichier du serveur
+          const response = await fetch('/api/delete-kml', {
+            method: 'DELETE'
+          });
+          
+          if (response.ok) {
+            // Supprimer les données du localStorage
+            localStorage.removeItem('kmlData');
+            
+            // Forcer la mise à jour en créant un fichier "vide"
+            const emptyKml = {
+              fileName: 'empty.kml',
+              kmlText: '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Empty Map</name></Document></kml>',
+              points: 0,
+              timestamp: new Date().toISOString(),
+              lastModified: new Date().toLocaleString('fr-FR'),
+              version: Date.now() // Version unique pour forcer la mise à jour
+            };
+            
+            localStorage.setItem('kmlData', JSON.stringify(emptyKml));
+            
+            // Réinitialiser l'interface
+            currentFile = null;
+            document.getElementById('kmlFile').value = '';
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('previewBtn').disabled = true;
+            document.getElementById('previewCard').classList.add('hidden');
+            
+            // Mettre à jour les statistiques
+            document.getElementById('totalPoints').textContent = '0';
+            document.getElementById('lastModified').textContent = 'Jamais';
+            document.getElementById('fileSize').textContent = '0 KB';
+            
+            addLog('✅ Fichier KML supprimé du serveur et du cache', 'success');
+            
+            // Ouvrir la carte vide
+            setTimeout(() => {
+              window.open('/', '_blank');
+            }, 1000);
+            
+          } else {
+            const error = await response.json();
+            addLog(`❌ Erreur lors de la suppression: ${error.error}`, 'error');
+          }
+          
+        } catch (error) {
+          addLog(`❌ Erreur lors de la suppression: ${error.message}`, 'error');
+        }
       }
     }
 

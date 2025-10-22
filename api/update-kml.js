@@ -1,3 +1,6 @@
+import fs from 'fs/promises';
+import path from 'path';
+
 export default async function handler(req, res) {
   // Vérifier la méthode HTTP
   if (req.method !== 'POST') {
@@ -19,13 +22,23 @@ export default async function handler(req, res) {
     // Analyser le fichier pour compter les points
     const placemarks = (kmlContent.match(/<Placemark>/g) || []).length;
 
-    // Log de l'opération
-    console.log(`Fichier KML reçu: ${placemarks} points trouvés`);
+    // Écrire le fichier sur le serveur
+    const dataDir = path.join(process.cwd(), 'public', 'data');
+    const filePath = path.join(dataDir, 'members.kml');
 
-    // Retourner les données pour que le client les sauvegarde
+    // Créer le dossier s'il n'existe pas
+    await fs.mkdir(dataDir, { recursive: true });
+    
+    // Écrire le fichier sur le serveur
+    await fs.writeFile(filePath, kmlContent, 'utf8');
+
+    // Log de l'opération
+    console.log(`Fichier KML mis à jour sur le serveur: ${placemarks} points`);
+
+    // Retourner les données
     res.status(200).json({
       success: true,
-      message: 'Fichier KML traité avec succès',
+      message: 'Fichier KML mis à jour avec succès',
       points: placemarks,
       fileName: fileName || 'members.kml',
       timestamp: new Date().toISOString()
