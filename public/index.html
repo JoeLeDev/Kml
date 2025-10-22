@@ -190,20 +190,20 @@
       }
     }
 
-    // Charger le fichier KML pré-chargé depuis le serveur
+    // Charger le fichier KML depuis Redis (priorité)
     async function loadPreloadedKml() {
       try {
-        // Essayer de charger depuis la base de données
+        // Essayer de charger depuis Redis
         const response = await fetch('/api/get-kml');
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data) {
             const kmlText = result.data.content;
-            console.log('Fichier KML chargé depuis la base de données');
+            console.log('Fichier KML chargé depuis Redis');
             
             const { points, countNoPoint } = extractPointsFromKml(kmlText);
             if (points.length > 0) {
-              setStatus(`Carte chargée automatiquement — ${points.length} points`);
+              setStatus(`Carte chargée depuis Redis — ${points.length} points`);
               $('stats').style.display = 'block';
               $('stats').innerHTML = `<b>${points.length}</b> points affichés ${countNoPoint ? '(+'+countNoPoint+' sans géométrie ignorés)' : ''}`;
               $('centerOnPoints').style.display = 'inline-block';
@@ -221,27 +221,30 @@
               localStorage.setItem('kmlData', JSON.stringify(kmlData));
               
               applyMarkers(points);
+              return; // Arrêter ici, données trouvées
             }
-          } else {
-            console.log('Aucun fichier KML trouvé dans la base de données');
           }
-        } else {
-          console.log('Aucun fichier KML pré-chargé trouvé');
         }
+        
+        // Si aucune donnée dans Redis, afficher message
+        console.log('Aucun fichier KML trouvé dans Redis');
+        setStatus('Aucun fichier KML trouvé dans la base de données');
+        
       } catch (error) {
-        console.log('Erreur lors du chargement du fichier pré-chargé:', error);
+        console.log('Erreur lors du chargement depuis Redis:', error);
+        setStatus('Erreur lors du chargement depuis la base de données');
       }
     }
 
-    // Charger les données KML sauvegardées
+    // Charger les données KML sauvegardées (fallback seulement)
     function loadSavedKmlData() {
       try {
         const savedData = localStorage.getItem('kmlData');
         if (savedData) {
           const kmlData = JSON.parse(savedData);
-          console.log('Données KML trouvées dans localStorage:', kmlData.fileName);
+          console.log('Données KML trouvées dans localStorage (fallback):', kmlData.fileName);
           
-          setStatus(`Données restaurées: ${kmlData.fileName} — ${kmlData.points.length} points`);
+          setStatus(`Données restaurées (cache): ${kmlData.fileName} — ${kmlData.points.length} points`);
           $('stats').style.display = 'block';
           $('stats').innerHTML = `<b>${kmlData.points.length}</b> points affichés ${kmlData.countNoPoint ? '(+'+kmlData.countNoPoint+' sans géométrie ignorés)' : ''}`;
           $('centerOnPoints').style.display = 'inline-block';
@@ -250,9 +253,11 @@
           applyMarkers(kmlData.points);
         } else {
           console.log('Aucune donnée KML sauvegardée trouvée');
+          setStatus('Aucun fichier KML trouvé');
         }
       } catch (e) {
         console.error('Erreur lors du chargement des données sauvegardées:', e);
+        setStatus('Erreur lors du chargement des données');
       }
     }
 
